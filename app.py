@@ -18,7 +18,7 @@ import av  # you need this too for VideoFrame handling
 from vision.pose_estimator import PoseEstimator
 from utils.corrections import check_form
 from utils.rep_counter import RepCounter
-from utils.utils import draw_landmarks, draw_text
+from utils.utils import draw_landmarks, draw_text, draw_angle  # Add draw_angle import
 
 
 # -----------------------
@@ -113,13 +113,24 @@ class VideoProcessor(VideoTransformerBase):
             primary_angle = None
             if self.exercise == "Squat":
                 # knee angle (right and left avg) or hip-knee-ankle
-                primary_angle = (angles.get("right_knee_angle") + angles.get("left_knee_angle")) / 2.0
+                right_knee = angles.get("right_knee_angle", 0)
+                left_knee = angles.get("left_knee_angle", 0)
+                primary_angle = (right_knee + left_knee) / 2.0
+                # Debug prints
+                print(f"Squat - Right knee: {right_knee:.1f}, Left knee: {left_knee:.1f}, Avg: {primary_angle:.1f}")
             elif self.exercise == "Push-up":
-                primary_angle = (angles.get("right_elbow_angle") + angles.get("left_elbow_angle")) / 2.0
+                right_elbow = angles.get("right_elbow_angle", 0)
+                left_elbow = angles.get("left_elbow_angle", 0)
+                primary_angle = (right_elbow + left_elbow) / 2.0
+                print(f"Push-up - Right elbow: {right_elbow:.1f}, Left elbow: {left_elbow:.1f}, Avg: {primary_angle:.1f}")
             elif self.exercise == "Deadlift":
-                primary_angle = (angles.get("back_angle"))  # custom back/hip angle
+                primary_angle = angles.get("back_angle", 0)  # custom back/hip angle
+                print(f"Deadlift - Back angle: {primary_angle:.1f}")
 
+            # Also show current counter state
             rep_event = self.rep_counter.update(primary_angle)
+            print(f"Counter state: {self.rep_counter.state}, Angle: {primary_angle:.1f}, Event: {rep_event}")
+            
             if rep_event == "up_to_down":
                 # optional mid-rep feedback
                 pass
@@ -152,6 +163,15 @@ class VideoProcessor(VideoTransformerBase):
             if self.show_overlay:
                 draw_landmarks(img, results.pose_landmarks, angles)
                 draw_text(img, f"Reps: {stats['reps']}", (10, 30))
+                
+                # Draw the primary angle being tracked prominently
+                if primary_angle is not None:
+                    draw_angle(img, primary_angle, pos=(int(img.shape[1]/2), 50))
+                    # Show threshold lines
+                    cv2.putText(img, f"Up > {self.rep_counter.up_angle}°", (10, 80), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 1)
+                    cv2.putText(img, f"Down < {self.rep_counter.down_angle}°", (10, 100), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 1)
 
         else:
             draw_text(img, "No person detected", (10, 30))
@@ -168,7 +188,10 @@ class VideoProcessor(VideoTransformerBase):
 # webrtc streamer
 webrtc_ctx = webrtc_streamer(
     key="webcam-coach",
-    mode=WebRtcMode.RECVONLY,
+    # Use SENDRECV so the browser will capture the webcam and send frames to
+    # the Python video processor. RECVONLY only receives video from the
+    # server and will not open the client's camera.
+    mode=WebRtcMode.SENDRECV,
     rtc_configuration=RTC_CONFIGURATION,
     video_processor_factory=VideoProcessor,
     media_stream_constraints={"video": True, "audio": False},

@@ -22,3 +22,9 @@ def draw_landmarks(image, pose_landmarks, angles=None):
 
 def draw_text(image, text, org=(10,30), color=(0,0,255)):
     cv2.putText(image, text, org, cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+def draw_angle(image, angle_value, pos=(50,50), color=(0,255,0)):
+    """Draw an angle value prominently on the image"""
+    if angle_value is not None:
+        cv2.putText(image, f"{angle_value:.1f}°", pos, 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 2)
